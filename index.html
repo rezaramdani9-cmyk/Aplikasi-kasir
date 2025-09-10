@@ -1,0 +1,1251 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Aplikasi Kasir</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+    <!-- Pustaka untuk Ekspor PDF -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <!-- Pustaka untuk Ekspor Excel -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+
+    <style>
+        body {
+            background: linear-gradient(135deg, #f3f4f6 0%, #e5e7eb 100%);
+            font-family: 'Inter', sans-serif;
+        }
+        .card {
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+        }
+        .card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.15);
+        }
+        .produk-img {
+            height: 100px;
+            object-fit: cover;
+            border-radius: 8px;
+        }
+        .struk {
+            font-family: 'Courier New', monospace;
+            background: #f9f9f9;
+            padding: 15px;
+            border: 1px solid #ccc;
+        }
+        .notification {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background: #22c55e;
+            color: white;
+            padding: 10px 15px;
+            border-radius: 8px;
+            display: none;
+            z-index: 1000;
+        }
+        .fade-in {
+            animation: fadeIn 0.5s;
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 9999;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0,0,0,0.5);
+        }
+        .modal-content {
+            background-color: #fefefe;
+            margin: 15% auto;
+            padding: 20px;
+            border: 1px solid #888;
+            width: 80%;
+            max-width: 400px;
+            border-radius: 8px;
+        }
+        /* CSS untuk menyembunyikan elemen admin secara default */
+        .admin-only {
+            display: none;
+        }
+        /* Style for readonly inputs */
+        input[readonly] {
+            background-color: #f0f0f0;
+            cursor: not-allowed;
+        }
+
+        /* --- Print Styles --- */
+        @media print {
+            /* Hide everything by default */
+            body * {
+                visibility: hidden;
+            }
+            /* Make strukContainer and its children visible */
+            #strukContainer, #strukContainer * {
+                visibility: visible;
+            }
+            #strukContainer {
+                position: absolute;
+                left: 0;
+                top: 0;
+                width: 100%;
+                height: auto;
+                margin: 0;
+                padding: 20px; /* Add some padding for print */
+                box-sizing: border-box;
+                background: white; /* Ensure white background for print */
+                color: black; /* Ensure black text for print */
+                font-size: 12px; /* Adjust font size for print */
+            }
+            #strukContainer .struk {
+                border: none; /* Remove border for print */
+                padding: 0; /* Remove padding for print */
+                background: none; /* Remove background for print */
+            }
+            /* Optional: Adjust margins for print */
+            @page {
+                margin: 10mm;
+            }
+
+            /* Print styles for reports */
+            #reportPrintArea {
+                visibility: visible;
+                position: absolute;
+                left: 0;
+                top: 0;
+                width: 100%;
+                height: auto;
+                margin: 0;
+                padding: 20px;
+                box-sizing: border-box;
+                background: white;
+                color: black;
+                font-size: 12px;
+            }
+            #reportPrintArea #reportOutput {
+                border: none;
+                padding: 0;
+                background: none;
+                max-height: none; /* Remove max-height for print */
+                overflow: visible; /* Make content visible */
+            }
+        }
+    </style>
+</head>
+<body class="min-h-screen py-6">
+    <div class="container mx-auto px-4 max-w-6xl">
+        <header class="text-center mb-8">
+            <h1 class="text-4xl font-bold text-gray-800">
+                <i class="fas fa-cash-register text-green-500 mr-2"></i>Aplikasi Kasir
+            </h1>
+            <p class="text-gray-600 mt-2">Aplikasi Kasir Lengkap untuk kelontong Anda</p>
+            <div class="mt-4">
+                <button id="showKasirBtn" class="bg-blue-500 text-white py-2 px-4 rounded hover:bg-blue-600 mr-2">
+                    <i class="fas fa-cash-register mr-1"></i>Kasir
+                </button>
+                <button id="showAdminPanelBtn" class="bg-green-500 text-white py-2 px-4 rounded hover:bg-green-600 admin-only">
+                    <i class="fas fa-tools mr-1"></i>Admin Panel
+                </button>
+                <button id="showBackupRestoreBtn" class="bg-purple-500 text-white py-2 px-4 rounded hover:bg-purple-600 admin-only">
+                    <i class="fas fa-database mr-1"></i>Backup/Restore
+                </button>
+                <button id="adminLoginBtn" class="bg-gray-500 text-white py-2 px-4 rounded hover:bg-gray-600 ml-2">
+                    <i class="fas fa-user-shield mr-1"></i>Login Admin
+                </button>
+                <button id="adminLogoutBtn" class="bg-red-500 text-white py-2 px-4 rounded hover:bg-red-600 ml-2 hidden">
+                    <i class="fas fa-sign-out-alt mr-1"></i>Logout Admin
+                </button>
+            </div>
+        </header>
+
+        <!-- Main Kasir Dashboard -->
+        <div id="kasirDashboard">
+            <!-- Panel Katalog Produk (Kasir View - Full Width at Top) -->
+            <div class="mb-8">
+                <div class="bg-white p-6 rounded-lg shadow-lg card">
+                    <h2 class="text-xl font-semibold mb-4 text-gray-800">
+                        <i class="fas fa-store mr-2"></i>Katalog Produk
+                    </h2>
+                    <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4 max-h-96 overflow-y-auto" id="produkListKasir">
+                        <!-- Produk akan dimuat di sini oleh JS -->
+                    </div>
+                </div>
+            </div>
+
+            <!-- Keranjang Belanja & Pembayaran (Side-by-Side Below) -->
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                <!-- Panel Keranjang Belanja -->
+                <div>
+                    <div class="bg-white p-6 rounded-lg shadow-lg card">
+                        <h2 class="text-xl font-semibold mb-4 text-gray-800">
+                            <i class="fas fa-shopping-cart mr-2"></i>Keranjang Belanja
+                        </h2>
+                        <div id="keranjangList" class="space-y-3 max-h-80 overflow-y-auto"></div>
+                        <div class="mt-4 border-t pt-4">
+                            <div class="flex justify-between mb-2">
+                                <span>Subtotal Item:</span><span id="subtotalItem">Rp 0</span>
+                            </div>
+                            <div class="flex justify-between mb-2">
+                                <span>Diskon Total:</span><span id="diskonTotal">Rp 0</span>
+                            </div>
+                            <div class="flex justify-between mb-2">
+                                <span>Pajak (%):</span>
+                                <input type="number" id="pajakPersen" class="w-20 p-1 border rounded text-right" value="10" min="0" readonly>
+                            </div>
+                            <div class="flex justify-between font-bold text-lg">
+                                <span>Total:</span><span id="total">Rp 0</span>
+                            </div>
+                        </div>
+                        <button id="hapusSemua" class="mt-4 w-full bg-red-500 text-white py-2 rounded hover:bg-red-600">
+                            <i class="fas fa-trash mr-2"></i>Hapus Semua
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Panel Pembayaran -->
+                <div>
+                    <div class="bg-white p-6 rounded-lg shadow-lg card">
+                        <h2 class="text-xl font-semibold mb-4 text-gray-800">
+                            <i class="fas fa-credit-card mr-2"></i>Pembayaran
+                        </h2>
+                        <input type="number" id="jumlahBayar" placeholder="Jumlah Bayar" class="w-full p-2 mb-4 border rounded">
+                        <div class="flex justify-between mb-4">
+                            <span>Kembalian:</span><span id="kembalian">Rp 0</span>
+                        </div>
+                        <button id="bayarBtn" class="w-full bg-green-500 text-white py-3 rounded hover:bg-green-600 mb-4">
+                            <i class="fas fa-check mr-2"></i>Bayar & Selesai
+                        </button>
+                        <button id="cetakStruk" class="w-full bg-blue-500 text-white py-2 rounded hover:bg-blue-600" disabled>
+                            <i class="fas fa-print mr-2"></i>Cetak Struk
+                        </button>
+                    </div>
+
+                    <!-- Riwayat Penjualan (di dashboard utama) -->
+                    <div class="mt-4 bg-white p-4 rounded-lg shadow-lg admin-only" id="riwayatKasirSection">
+                        <h3 class="font-semibold text-gray-800 mb-3">Riwayat Penjualan</h3>
+                        <div id="riwayatListKasir" class="space-y-2 max-h-60 overflow-y-auto text-sm"></div>
+                        <button id="hapusRiwayatKasir" class="mt-2 w-full bg-gray-500 text-white py-1 rounded hover:bg-gray-600 text-xs">
+                            <i class="fas fa-trash mr-1"></i>Hapus Riwayat
+                        </button>
+                    </div>
+
+                    <!-- Struk Simulasi (Hidden) -->
+                    <div id="strukContainer" class="mt-4 hidden">
+                        <h3 class="font-semibold text-gray-800 mb-2">Struk</h3>
+                        <div class="struk text-xs" id="struk"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Admin Panel Section -->
+        <div id="adminPanelSection" class="hidden bg-white p-6 rounded-lg shadow-lg mt-8 admin-only">
+            <h2 class="text-xl font-semibold mb-4 text-gray-800">
+                <i class="fas fa-cogs mr-2"></i>Manajemen Produk
+            </h2>
+
+            <!-- Tambah Produk Baru -->
+            <div class="mb-6 bg-gray-50 p-4 rounded-lg">
+                <h3 class="font-semibold text-gray-800 mb-3">Tambah Produk Baru</h3>
+                <input type="text" id="namaProduk" placeholder="Nama Produk" class="w-full p-2 mb-2 border rounded">
+                <input type="number" id="hargaProduk" placeholder="Harga (Rp)" class="w-full p-2 mb-2 border rounded">
+                <label for="gambarProdukInput" class="block text-sm font-medium text-gray-700 mt-2 mb-1">Gambar Produk (Opsional):</label>
+                <input type="file" id="gambarProdukInput" accept="image/*" class="w-full p-2 mb-2 border rounded">
+                <input type="number" id="diskonProdukBaru" placeholder="Diskon Produk (%)" class="w-full p-2 mb-2 border rounded" min="0" max="100" value="0">
+                <button id="tambahProduk" class="w-full bg-blue-500 text-white py-2 rounded hover:bg-blue-600">
+                    <i class="fas fa-plus mr-2"></i>Tambah Produk
+                </button>
+            </div>
+
+            <!-- Daftar Produk untuk Edit/Hapus -->
+            <div class="mb-6">
+                <h3 class="font-semibold text-gray-800 mb-3">Daftar Produk</h3>
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 max-h-96 overflow-y-auto" id="produkListAdmin">
+                    <!-- Produk akan dimuat di sini oleh JS -->
+                </div>
+            </div>
+
+            <h2 class="text-xl font-semibold mb-4 mt-8 text-gray-800">
+                <i class="fas fa-chart-line mr-2"></i>Laporan Penjualan
+            </h2>
+            <div class="mb-6 bg-gray-50 p-4 rounded-lg">
+                <h3 class="font-semibold text-gray-800 mb-3">Pilih Periode Laporan</h3>
+                <div class="flex space-x-2 mb-4">
+                    <button id="reportHarianBtn" class="flex-1 bg-blue-500 text-white py-2 px-4 rounded hover:bg-blue-600">Harian</button>
+                    <button id="reportMingguanBtn" class="flex-1 bg-blue-500 text-white py-2 px-4 rounded hover:bg-blue-600">Mingguan</button>
+                    <button id="reportBulananBtn" class="flex-1 bg-blue-500 text-white py-2 px-4 rounded hover:bg-blue-600">Bulanan</button>
+                </div>
+                <div id="reportPrintArea" class="bg-white p-4 rounded-lg border border-gray-200 max-h-60 overflow-y-auto text-sm">
+                    <div id="reportOutput">
+                        <p class="text-gray-600">Pilih periode laporan untuk melihat ringkasan penjualan.</p>
+                    </div>
+                </div>
+                <div class="mt-4 flex space-x-2">
+                    <button id="printReportBtn" class="flex-1 bg-gray-500 text-white py-2 px-4 rounded hover:bg-gray-600" disabled>
+                        <i class="fas fa-print mr-1"></i>Cetak Laporan
+                    </button>
+                    <button id="exportPdfBtn" class="flex-1 bg-red-500 text-white py-2 px-4 rounded hover:bg-red-600" disabled>
+                        <i class="fas fa-file-pdf mr-1"></i>Ekspor PDF
+                    </button>
+                    <button id="exportExcelBtn" class="flex-1 bg-green-500 text-white py-2 px-4 rounded hover:bg-green-600" disabled>
+                        <i class="fas fa-file-excel mr-1"></i>Ekspor Excel
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Backup/Restore Section -->
+        <div id="backupRestoreSection" class="hidden bg-white p-6 rounded-lg shadow-lg mt-8 admin-only">
+            <h2 class="text-xl font-semibold mb-4 text-gray-800">
+                <i class="fas fa-database mr-2"></i>Backup & Restore Data
+            </h2>
+
+            <div class="mb-6">
+                <h3 class="font-semibold text-gray-700 mb-2">Backup Data</h3>
+                <p class="text-gray-600 mb-3">Unduh semua data produk dan riwayat penjualan Anda sebagai file JSON.</p>
+                <button id="backupDataBtn" class="w-full bg-green-500 text-white py-2 rounded hover:bg-green-600">
+                    <i class="fas fa-download mr-2"></i>Backup Data Sekarang
+                </button>
+            </div>
+
+            <div class="mb-6">
+                <h3 class="font-semibold text-gray-700 mb-2">Restore Data</h3>
+                <p class="text-gray-600 mb-3">Unggah file JSON backup untuk mengembalikan data produk dan riwayat penjualan Anda. **PERINGATAN: Ini akan menimpa data yang ada!**</p>
+                <input type="file" id="restoreFileInput" accept=".json" class="w-full p-2 mb-3 border rounded">
+                <button id="restoreDataBtn" class="w-full bg-red-500 text-white py-2 rounded hover:bg-red-600">
+                    <i class="fas fa-upload mr-2"></i>Restore Data
+                </button>
+            </div>
+
+            <!-- Riwayat Penjualan (di sub-menu backup/restore) -->
+             <div id="riwayatListBackup" class="space-y-2 max-h-60 overflow-y-auto text-sm"></div>
+            </div>
+        </div>
+
+        <!-- Modal Edit Produk -->
+        <div id="editModal" class="modal">
+            <div class="modal-content">
+                <span id="closeModal" class="close absolute top-2 right-2 text-2xl cursor-pointer">&times;</span>
+                <h3 class="font-semibold text-gray-800 mb-3">Edit Produk</h3>
+                <input type="text" id="editNama" placeholder="Nama Produk" class="w-full p-2 mb-2 border rounded">
+                <input type="number" id="editHarga" placeholder="Harga (Rp)" class="w-full p-2 mb-2 border rounded">
+                <label for="editGambarInput" class="block text-sm font-medium text-gray-700 mt-2 mb-1">Ganti Gambar Produk (Opsional):</label>
+                <input type="file" id="editGambarInput" accept="image/*" class="w-full p-2 mb-2 border rounded">
+                <input type="number" id="editDiskonProduk" placeholder="Diskon Produk (%)" class="w-full p-2 mb-2 border rounded" min="0" max="100">
+                <button id="simpanEdit" class="w-full bg-green-500 text-white py-2 rounded hover:bg-green-600">
+                    <i class="fas fa-save mr-2"></i>Simpan Perubahan
+                </button>
+            </div>
+        </div>
+
+        <!-- Notifikasi -->
+        <div id="notification" class="notification">
+            <i class="fas fa-check mr-2"></i>Produk ditambah ke keranjang!
+        </div>
+    </div>
+
+    <script>
+        const produkListKasir = document.getElementById('produkListKasir'); // New ID for kasir view
+        const produkListAdmin = document.getElementById('produkListAdmin'); // New ID for admin view
+        const keranjangList = document.getElementById('keranjangList');
+        const riwayatListKasir = document.getElementById('riwayatListKasir');
+        const riwayatListBackup = document.getElementById('riwayatListBackup');
+
+        const subtotalItemEl = document.getElementById('subtotalItem');
+        const diskonTotalEl = document.getElementById('diskonTotal');
+        const totalEl = document.getElementById('total');
+        const kembalianEl = document.getElementById('kembalian');
+        const notification = document.getElementById('notification');
+        const editModal = document.getElementById('editModal');
+        const closeModal = document.getElementById('closeModal');
+        const simpanEdit = document.getElementById('simpanEdit');
+        const editNama = document.getElementById('editNama');
+        const editHarga = document.getElementById('editHarga');
+        const editGambarInput = document.getElementById('editGambarInput'); // Changed to file input
+        const editDiskonProduk = document.getElementById('editDiskonProduk'); // New input for product discount
+
+        const kasirDashboard = document.getElementById('kasirDashboard');
+        const adminPanelSection = document.getElementById('adminPanelSection'); // New admin panel section
+        const backupRestoreSection = document.getElementById('backupRestoreSection');
+        const showKasirBtn = document.getElementById('showKasirBtn');
+        const showAdminPanelBtn = document.getElementById('showAdminPanelBtn'); // New button for admin panel
+        const showBackupRestoreBtn = document.getElementById('showBackupRestoreBtn');
+        const backupDataBtn = document.getElementById('backupDataBtn');
+        const restoreFileInput = document.getElementById('restoreFileInput');
+        const restoreDataBtn = document.getElementById('restoreDataBtn');
+
+        const hapusRiwayatKasir = document.getElementById('hapusRiwayatKasir');
+        const hapusRiwayatBackup = document.getElementById('hapusRiwayatBackup');
+
+        const adminLoginBtn = document.getElementById('adminLoginBtn');
+        const adminLogoutBtn = document.getElementById('adminLogoutBtn');
+        const riwayatKasirSection = document.getElementById('riwayatKasirSection');
+
+        const namaProdukInput = document.getElementById('namaProduk'); // Renamed for clarity
+        const hargaProdukInput = document.getElementById('hargaProduk'); // Renamed for clarity
+        const gambarProdukInput = document.getElementById('gambarProdukInput'); // Changed to file input
+        const diskonProdukBaruInput = document.getElementById('diskonProdukBaru'); // New input for new product discount
+        const tambahProdukBtn = document.getElementById('tambahProduk'); // Renamed for clarity
+
+        const pajakPersenInput = document.getElementById('pajakPersen');
+
+        const reportHarianBtn = document.getElementById('reportHarianBtn');
+        const reportMingguanBtn = document.getElementById('reportMingguanBtn');
+        const reportBulananBtn = document.getElementById('reportBulananBtn');
+        const reportOutput = document.getElementById('reportOutput');
+        const reportPrintArea = document.getElementById('reportPrintArea'); // New element for print area
+        const printReportBtn = document.getElementById('printReportBtn');
+        const exportPdfBtn = document.getElementById('exportPdfBtn');
+        const exportExcelBtn = document.getElementById('exportExcelBtn');
+
+
+        // Daftar Admin (username dan password) - TIDAK AMAN untuk produksi, hanya demo
+        const ADMINS = [
+            { username: "admin", password: "admin" }, // Admin default
+            { username: "kasir1", password: "kasir1" }, // Contoh admin kedua
+            { username: "manager", password: "manager" }, // Contoh admin ketiga
+			{ username: "reza", password: "reza" }
+            // Anda bisa menambahkan lebih banyak admin di sini
+        ];
+
+        let isAdminLoggedIn = false; // Status login admin
+
+        let keranjang = [];
+        let riwayat = JSON.parse(localStorage.getItem('riwayatPenjualan')) || [];
+        // Default image in Base64 (a small transparent PNG)
+        const DEFAULT_IMAGE_BASE64 = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=";
+
+        // Pastikan setiap produk memiliki properti diskonProduk dan gambar (Base64)
+        let katalogProduk = JSON.parse(localStorage.getItem('katalogProduk')) || [
+            { nama: "Roti Tawar", harga: 15000, gambar: DEFAULT_IMAGE_BASE64, diskonProduk: 0 },
+            { nama: "Susu Kotak", harga: 10000, gambar: DEFAULT_IMAGE_BASE64, diskonProduk: 0 },
+            { nama: "Indomie Goreng", harga: 3000, gambar: DEFAULT_IMAGE_BASE64, diskonProduk: 0 },
+            { nama: "Teh Botol", harga: 5000, gambar: DEFAULT_IMAGE_BASE64, diskonProduk: 0 },
+            { nama: "Sabun Mandi", harga: 25000, gambar: DEFAULT_IMAGE_BASE64, diskonProduk: 0 }
+        ];
+        // Pastikan semua produk yang ada di localStorage memiliki properti diskonProduk dan gambar
+        katalogProduk = katalogProduk.map(produk => ({
+            ...produk,
+            diskonProduk: produk.diskonProduk !== undefined ? produk.diskonProduk : 0,
+            gambar: produk.gambar || DEFAULT_IMAGE_BASE64 // Ensure image is always present
+        }));
+
+        let editIndex = -1;
+        let currentReportData = null; // To store data for export functions
+
+        // Initial load and UI update based on admin status
+        updateRiwayat();
+        updateKatalogKasir(); // Update kasir catalog on load
+        updateKatalogAdmin(); // Update admin catalog on load
+        calculateTotal();
+        updateAdminUI(); // Call this initially to set up the UI
+
+        // --- Admin Login/Logout Logic ---
+        adminLoginBtn.addEventListener('click', () => {
+            const username = prompt("Masukkan username admin:");
+            if (!username) return; // User cancelled
+
+            const password = prompt("Masukkan kata sandi admin:");
+            if (!password) return; // User cancelled
+
+            const foundAdmin = ADMINS.find(admin => admin.username === username && admin.password === password);
+
+            if (foundAdmin) {
+                isAdminLoggedIn = true;
+                showNotification(`Login Admin ${username} Berhasil!`, 'success');
+                updateAdminUI();
+                updateKatalogAdmin(); // Refresh admin catalog after login
+            } else {
+                showNotification('Username atau kata sandi salah!', 'error');
+            }
+        });
+
+        adminLogoutBtn.addEventListener('click', () => {
+            isAdminLoggedIn = false;
+            showNotification('Logout Admin Berhasil!', 'info');
+            updateAdminUI();
+            updateKatalogAdmin(); // Refresh admin catalog after logout (to hide edit buttons)
+            // If currently on admin panel or backup/restore section, switch back to kasir
+            if (!adminPanelSection.classList.contains('hidden') || !backupRestoreSection.classList.contains('hidden')) {
+                showKasirBtn.click();
+            }
+        });
+
+        function updateAdminUI() {
+            const adminElements = document.querySelectorAll('.admin-only');
+            const diskonItemInputs = document.querySelectorAll('.diskon-item-input');
+
+            if (isAdminLoggedIn) {
+                adminLoginBtn.classList.add('hidden');
+                adminLogoutBtn.classList.remove('hidden');
+                // Hapus kelas admin-only untuk semua elemen yang seharusnya terlihat oleh admin
+                adminElements.forEach(el => el.classList.remove('admin-only'));
+                // Pastikan riwayatKasirSection terlihat saat admin login
+                riwayatKasirSection.style.display = 'block'; 
+
+                pajakPersenInput.removeAttribute('readonly');
+                diskonItemInputs.forEach(input => input.removeAttribute('readonly'));
+            } else {
+                adminLoginBtn.classList.remove('hidden');
+                adminLogoutBtn.classList.add('hidden');
+                // Tambahkan kelas admin-only untuk semua elemen yang seharusnya tersembunyi dari user biasa
+                adminElements.forEach(el => el.classList.add('admin-only'));
+                // Pastikan riwayatKasirSection tersembunyi saat admin tidak login
+                riwayatKasirSection.style.display = 'none'; 
+
+                pajakPersenInput.setAttribute('readonly', true);
+                diskonItemInputs.forEach(input => input.setAttribute('readonly', true));
+            }
+        }
+
+
+        // --- Navigation Logic ---
+        showKasirBtn.addEventListener('click', () => {
+            kasirDashboard.classList.remove('hidden');
+            adminPanelSection.classList.add('hidden'); // Hide admin panel
+            backupRestoreSection.classList.add('hidden');
+            updateRiwayat();
+            updateKatalogKasir(); // Ensure kasir catalog is updated
+        });
+
+        showAdminPanelBtn.addEventListener('click', () => {
+            if (isAdminLoggedIn) {
+                kasirDashboard.classList.add('hidden');
+                adminPanelSection.classList.remove('hidden'); // Show admin panel
+                backupRestoreSection.classList.add('hidden');
+                updateKatalogAdmin(); // Ensure admin catalog is updated
+            } else {
+                showNotification('Anda harus login sebagai admin untuk mengakses fitur ini!', 'error');
+            }
+        });
+
+        showBackupRestoreBtn.addEventListener('click', () => {
+            if (isAdminLoggedIn) {
+                kasirDashboard.classList.add('hidden');
+                adminPanelSection.classList.add('hidden'); // Hide admin panel
+                backupRestoreSection.classList.remove('hidden');
+                updateRiwayat();
+            } else {
+                showNotification('Anda harus login sebagai admin untuk mengakses fitur ini!', 'error');
+            }
+        });
+
+        // --- Backup/Restore Logic ---
+        backupDataBtn.addEventListener('click', () => {
+            if (!isAdminLoggedIn) {
+                showNotification('Anda harus login sebagai admin untuk melakukan backup!', 'error');
+                return;
+            }
+            const dataToBackup = {
+                katalogProduk: katalogProduk,
+                riwayatPenjualan: riwayat
+            };
+            const jsonData = JSON.stringify(dataToBackup, null, 2);
+            const blob = new Blob([jsonData], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `Aplikasi_backup_${new Date().toISOString().slice(0,10)}.json`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+            showNotification('Data berhasil di-backup!', 'success');
+        });
+
+        restoreDataBtn.addEventListener('click', () => {
+            if (!isAdminLoggedIn) {
+                showNotification('Anda harus login sebagai admin untuk melakukan restore!', 'error');
+                return;
+            }
+            const file = restoreFileInput.files[0];
+            if (!file) {
+                alert('Pilih file JSON untuk restore!');
+                return;
+            }
+
+            if (!confirm('Anda yakin ingin me-restore data? Ini akan menimpa semua data produk dan riwayat penjualan yang ada!')) {
+                return;
+            }
+
+            const reader = new FileReader();
+            reader.onload = (event) => {
+                try {
+                    const restoredData = JSON.parse(event.target.result);
+                    if (restoredData.katalogProduk && restoredData.riwayatPenjualan) {
+                        katalogProduk = restoredData.katalogProduk;
+                        riwayat = restoredData.riwayatPenjualan;
+
+                        // Pastikan data yang di-restore memiliki properti diskonProduk dan gambar
+                        katalogProduk = katalogProduk.map(produk => ({
+                            ...produk,
+                            diskonProduk: produk.diskonProduk !== undefined ? produk.diskonProduk : 0,
+                            gambar: produk.gambar || DEFAULT_IMAGE_BASE64
+                        }));
+
+                        localStorage.setItem('katalogProduk', JSON.stringify(katalogProduk));
+                        localStorage.setItem('riwayatPenjualan', JSON.stringify(riwayat));
+
+                        updateKatalogKasir(); // Update both catalogs after restore
+                        updateKatalogAdmin();
+                        updateRiwayat();
+                        keranjang = [];
+                        updateKeranjang();
+                        showNotification('Data berhasil di-restore!', 'success');
+                    } else {
+                        alert('Format file JSON tidak valid. Pastikan berisi "katalogProduk" dan "riwayatPenjualan".');
+                    }
+                } catch (e) {
+                    alert('Gagal membaca file JSON. Pastikan file tidak rusak.');
+                    console.error(e);
+                }
+            };
+            reader.readAsText(file);
+        });
+
+
+        // --- Katalog Produk (Kasir View) ---
+        produkListKasir.addEventListener('click', (e) => {
+            if (e.target.classList.contains('produk-item') || e.target.closest('.produk-item')) {
+                const itemEl = e.target.closest('.produk-item');
+                const index = parseInt(itemEl.dataset.index);
+                tambahKeKeranjang(katalogProduk[index].nama, katalogProduk[index].harga);
+                showNotification('Produk ditambah ke keranjang!', 'success');
+            }
+        });
+
+        function updateKatalogKasir() {
+            produkListKasir.innerHTML = '';
+            katalogProduk.forEach((produk, index) => {
+                const gambarSrc = produk.gambar || DEFAULT_IMAGE_BASE64; // Default image if none
+                const gambarAlt = `Gambar produk ${produk.nama}`;
+                produkListKasir.innerHTML += `
+                    <div class="produk-item flex flex-col items-center p-3 bg-gray-50 rounded hover:bg-gray-100 cursor-pointer" data-nama="${produk.nama}" data-harga="${produk.harga}" data-index="${index}">
+                        <img src="${gambarSrc}" alt="${gambarAlt}" class="produk-img mb-2">
+                        <div class="text-center">
+                            <p class="font-medium text-sm">${produk.nama}</p>
+                            <p class="text-xs text-gray-600">Rp ${produk.harga.toLocaleString()}</p>
+                            ${produk.diskonProduk > 0 ? `<p class="text-xs text-red-500">Diskon: ${produk.diskonProduk}%</p>` : ''}
+                        </div>
+                    </div>
+                `;
+            });
+        }
+
+        // Helper function to convert file to Base64
+        function fileToBase64(file) {
+            return new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.readAsDataURL(file);
+                reader.onload = () => resolve(reader.result);
+                reader.onerror = error => reject(error);
+            });
+        }
+
+        // --- Manajemen Produk (Admin Panel) ---
+        tambahProdukBtn.addEventListener('click', async () => {
+            if (!isAdminLoggedIn) {
+                showNotification('Anda harus login sebagai admin untuk menambah produk!', 'error');
+                return;
+            }
+            const nama = namaProdukInput.value.trim();
+            const harga = parseInt(hargaProdukInput.value);
+            const diskonProdukBaru = parseFloat(diskonProdukBaruInput.value);
+            const gambarFile = gambarProdukInput.files[0];
+            let gambarBase64 = DEFAULT_IMAGE_BASE64;
+
+            if (gambarFile) {
+                try {
+                    gambarBase64 = await fileToBase64(gambarFile);
+                } catch (error) {
+                    showNotification('Gagal membaca file gambar!', 'error');
+                    console.error('Error reading file:', error);
+                    return;
+                }
+            }
+
+            if (nama && harga > 0 && !isNaN(diskonProdukBaru) && diskonProdukBaru >= 0 && diskonProdukBaru <= 100) {
+                katalogProduk.push({ nama, harga, gambar: gambarBase64, diskonProduk: diskonProdukBaru }); // Add diskonProduk
+                localStorage.setItem('katalogProduk', JSON.stringify(katalogProduk));
+                updateKatalogKasir(); // Update both catalogs
+                updateKatalogAdmin();
+                namaProdukInput.value = '';
+                hargaProdukInput.value = '';
+                gambarProdukInput.value = ''; // Clear file input
+                diskonProdukBaruInput.value = '0'; // Reset discount input
+                showNotification('Produk baru berhasil ditambahkan!', 'success');
+            } else {
+                alert('Isi nama, harga, dan diskon dengan benar! Diskon harus antara 0-100.');
+            }
+        });
+
+        produkListAdmin.addEventListener('click', (e) => {
+            // Edit Product
+            if (e.target.classList.contains('edit-produk') || e.target.closest('.edit-produk')) {
+                if (!isAdminLoggedIn) {
+                    showNotification('Anda harus login sebagai admin untuk mengedit produk!', 'error');
+                    return;
+                }
+                const index = parseInt(e.target.closest('.edit-produk').dataset.index);
+                editIndex = index;
+                editNama.value = katalogProduk[index].nama;
+                editHarga.value = katalogProduk[index].harga;
+                // editGambarInput.value = ''; // Clear file input for security reasons, user must re-select
+                editDiskonProduk.value = katalogProduk[index].diskonProduk || 0; // Populate product discount
+                editModal.style.display = 'block';
+            }
+            // Delete Product
+            if (e.target.classList.contains('hapus-produk') || e.target.closest('.hapus-produk')) {
+                if (!isAdminLoggedIn) {
+                    showNotification('Anda harus login sebagai admin untuk menghapus produk!', 'error');
+                    return;
+                }
+                const index = parseInt(e.target.closest('.hapus-produk').dataset.index);
+                if (confirm(`Anda yakin ingin menghapus produk "${katalogProduk[index].nama}"?`)) {
+                    katalogProduk.splice(index, 1);
+                    localStorage.setItem('katalogProduk', JSON.stringify(katalogProduk));
+                    updateKatalogKasir(); // Update both catalogs
+                    updateKatalogAdmin();
+                    showNotification('Produk berhasil dihapus!', 'info');
+                }
+            }
+        });
+
+        simpanEdit.addEventListener('click', async () => {
+            if (!isAdminLoggedIn) {
+                showNotification('Anda harus login sebagai admin untuk menyimpan perubahan!', 'error');
+                return;
+            }
+            const newDiskonProduk = parseFloat(editDiskonProduk.value);
+            const gambarFile = editGambarInput.files[0];
+            let gambarBase64 = katalogProduk[editIndex].gambar; // Keep existing image if no new file selected
+
+            if (gambarFile) {
+                try {
+                    gambarBase64 = await fileToBase64(gambarFile);
+                } catch (error) {
+                    showNotification('Gagal membaca file gambar!', 'error');
+                    console.error('Error reading file:', error);
+                    return;
+                }
+            }
+
+            if (editNama.value.trim() && editHarga.value > 0 && !isNaN(newDiskonProduk) && newDiskonProduk >= 0 && newDiskonProduk <= 100) {
+                katalogProduk[editIndex].nama = editNama.value.trim();
+                katalogProduk[editIndex].harga = parseInt(editHarga.value);
+                katalogProduk[editIndex].gambar = gambarBase64; // Save image Base64
+                katalogProduk[editIndex].diskonProduk = newDiskonProduk; // Save product discount
+                localStorage.setItem('katalogProduk', JSON.stringify(katalogProduk));
+                updateKatalogKasir(); // Update both catalogs
+                updateKatalogAdmin();
+                editModal.style.display = 'none';
+                editNama.value = '';
+                editHarga.value = '';
+                editGambarInput.value = ''; // Clear file input
+                editDiskonProduk.value = ''; // Clear discount input
+                showNotification('Produk berhasil diupdate!', 'success');
+            } else {
+                alert('Isi nama, harga, dan diskon dengan benar! Diskon harus antara 0-100.');
+            }
+        });
+
+        closeModal.addEventListener('click', () => {
+            editModal.style.display = 'none';
+        });
+
+        window.onclick = function(event) {
+            if (event.target == editModal) {
+                editModal.style.display = 'none';
+            }
+        };
+
+        function updateKatalogAdmin() {
+            produkListAdmin.innerHTML = '';
+            katalogProduk.forEach((produk, index) => {
+                const gambarSrc = produk.gambar || DEFAULT_IMAGE_BASE64; // Default image if none
+                const gambarAlt = `Gambar produk ${produk.nama}`;
+                produkListAdmin.innerHTML += `
+                    <div class="produk-item flex flex-col items-center p-3 bg-gray-50 rounded hover:bg-gray-100">
+                        <img src="${gambarSrc}" alt="${gambarAlt}" class="produk-img mb-2">
+                        <div class="text-center flex-1">
+                            <p class="font-medium text-sm">${produk.nama}</p>
+                            <p class="text-xs text-gray-600">Rp ${produk.harga.toLocaleString()}</p>
+                            <p class="text-xs text-blue-600">Diskon: ${produk.diskonProduk}%</p>
+                        </div>
+                        <div class="mt-2 flex space-x-2">
+                            <button class="edit-produk btn text-blue-500 hover:text-blue-700" data-index="${index}"><i class="fas fa-edit"></i> Edit</button>
+                            <button class="hapus-produk btn text-red-500 hover:text-red-700" data-index="${index}"><i class="fas fa-trash"></i> Hapus</button>
+                        </div>
+                    </div>
+                `;
+            });
+        }
+
+        // Fungsi-fungsi keranjang dan pembayaran tetap sama (akses user biasa)
+        function tambahKeKeranjang(nama, harga) {
+            const existing = keranjang.find(item => item.nama === nama);
+            const produk = katalogProduk.find(p => p.nama === nama); // Cari produk untuk mendapatkan diskon produknya
+            const diskonProduk = produk ? produk.diskonProduk : 0; // Dapatkan diskon spesifik produk
+
+            if (existing) {
+                existing.jumlah++;
+            } else {
+                // Gunakan diskonProduk sebagai diskonPersenItem awal
+                keranjang.push({ nama, harga, jumlah: 1, diskonPersenItem: diskonProduk });
+            }
+            updateKeranjang();
+        }
+
+        function updateKeranjang() {
+            keranjangList.innerHTML = '';
+            keranjang.forEach((item, index) => {
+                const diskonReadonly = isAdminLoggedIn ? '' : 'readonly';
+                keranjangList.innerHTML += `
+                    <div class="flex justify-between items-center p-2 bg-gray-50 rounded">
+                        <div class="flex-1">
+                            <p class="font-medium">${item.nama}</p>
+                            <p class="text-sm text-gray-600">Rp ${item.harga.toLocaleString()}</p>
+                            <div class="flex items-center text-sm mt-1">
+                                <span>Diskon:</span>
+                                <input type="number" class="diskon-item-input w-16 p-1 ml-2 border rounded text-right" value="${item.diskonPersenItem}" min="0" max="100" data-index="${index}" ${diskonReadonly}>
+                                <span>%</span>
+                            </div>
+                        </div>
+                        <div class="flex items-center">
+                            <button class="minus btn text-red-500 hover:text-red-700 mr-2" data-index="${index}"><i class="fas fa-minus"></i></button>
+                            <span>${item.jumlah}</span>
+                            <button class="plus btn text-green-500 hover:text-green-700 ml-2" data-index="${index}"><i class="fas fa-plus"></i></button>
+                            <button class="hapus btn ml-3 text-gray-500 hover:text-gray-700" data-index="${index}"><i class="fas fa-times"></i></button>
+                        </div>
+                    </div>
+                `;
+            });
+            calculateTotal();
+            updateAdminUI(); // Re-apply admin UI settings for new diskon inputs
+        }
+
+        keranjangList.addEventListener('input', (e) => {
+            if (e.target.classList.contains('diskon-item-input')) {
+                const index = parseInt(e.target.dataset.index);
+                let value = parseFloat(e.target.value);
+                if (isNaN(value) || value < 0) value = 0;
+                if (value > 100) value = 100;
+                keranjang[index].diskonPersenItem = value;
+                e.target.value = value;
+                calculateTotal();
+            }
+        });
+
+        keranjangList.addEventListener('click', (e) => {
+            const targetBtn = e.target.closest('.btn');
+            if (!targetBtn) return;
+
+            const index = parseInt(targetBtn.dataset.index);
+            if (targetBtn.classList.contains('plus')) {
+                keranjang[index].jumlah++;
+            } else if (targetBtn.classList.contains('minus')) {
+                keranjang[index].jumlah = Math.max(1, keranjang[index].jumlah - 1);
+            } else if (targetBtn.classList.contains('hapus')) {
+                keranjang.splice(index, 1);
+            }
+            updateKeranjang();
+        });
+
+        document.getElementById('hapusSemua').addEventListener('click', () => {
+            keranjang = [];
+            updateKeranjang();
+            showNotification('Keranjang berhasil dikosongkan!', 'info');
+        });
+
+        document.addEventListener('input', (e) => {
+            if (e.target.id === 'pajakPersen' && !e.target.readOnly) {
+                calculateTotal();
+            }
+        });
+
+        function calculateTotal() {
+            let subtotalItem = 0;
+            let totalDiskon = 0;
+
+            keranjang.forEach(item => {
+                const hargaAsliPerItem = item.harga * item.jumlah;
+                const diskonNominalPerItem = (item.diskonPersenItem / 100) * hargaAsliPerItem;
+                
+                subtotalItem += hargaAsliPerItem;
+                totalDiskon += diskonNominalPerItem;
+            });
+
+            const subtotalSetelahDiskon = subtotalItem - totalDiskon;
+            
+            const pajak = (parseFloat(pajakPersenInput.value) / 100) * subtotalSetelahDiskon;
+            const totalAkhir = subtotalSetelahDiskon + pajak;
+
+            subtotalItemEl.textContent = `Rp ${subtotalItem.toLocaleString()}`;
+            diskonTotalEl.textContent = `Rp ${totalDiskon.toLocaleString()}`;
+            totalEl.textContent = `Rp ${Math.round(totalAkhir).toLocaleString()}`;
+        }
+
+        document.getElementById('jumlahBayar').addEventListener('input', () => {
+            const bayar = parseFloat(document.getElementById('jumlahBayar').value) || 0;
+            const total = parseFloat(totalEl.textContent.replace(/[^0-9]/g, ''));
+            kembalianEl.textContent = `Rp ${(bayar - total).toLocaleString()}`;
+        });
+
+        document.getElementById('bayarBtn').addEventListener('click', () => {
+            const bayar = parseFloat(document.getElementById('jumlahBayar').value) || 0;
+            const total = parseFloat(totalEl.textContent.replace(/[^0-9]/g, ''));
+            if (bayar >= total && keranjang.length > 0) {
+                const transaksi = {
+                    tanggal: new Date().toLocaleString(),
+                    item: keranjang.map(item => ({
+                        nama: item.nama,
+                        harga: item.harga,
+                        jumlah: item.jumlah,
+                        diskonPersenItem: item.diskonPersenItem
+                    })),
+                    pajakPersenTransaksi: parseFloat(pajakPersenInput.value) || 0,
+                    total: Math.round(total),
+                    bayar,
+                    kembalian: bayar - Math.round(total)
+                };
+                riwayat.push(transaksi);
+                localStorage.setItem('riwayatPenjualan', JSON.stringify(riwayat));
+                keranjang = [];
+                updateKeranjang();
+                updateRiwayat();
+                document.getElementById('jumlahBayar').value = '';
+                kembalianEl.textContent = 'Rp 0';
+                document.getElementById('cetakStruk').disabled = false;
+                alert('Transaksi selesai! Klik "Cetak Struk" untuk struk.');
+                showNotification('Transaksi berhasil!', 'success');
+            } else {
+                alert('Jumlah bayar tidak cukup atau keranjang kosong!');
+            }
+        });
+
+        document.getElementById('cetakStruk').addEventListener('click', () => {
+            const struk = document.getElementById('struk');
+            const transaksiTerakhir = riwayat[riwayat.length - 1];
+            if (!transaksiTerakhir) {
+                alert('Tidak ada transaksi untuk dicetak!');
+                return;
+            }
+
+            const pajakPersenTransaksi = transaksiTerakhir.pajakPersenTransaksi || 0;
+
+            let subtotalItemAsli = 0;
+            let totalDiskonNominal = 0;
+
+            let itemRows = transaksiTerakhir.item.map(item => {
+                const hargaSatuan = item.harga;
+                const jumlah = item.jumlah;
+                const diskonPersenItem = item.diskonPersenItem || 0;
+                
+                const hargaAsliPerItem = hargaSatuan * jumlah;
+                const diskonNominalPerItem = (diskonPersenItem / 100) * hargaAsliPerItem;
+                const hargaSetelahDiskonPerItem = hargaAsliPerItem - diskonNominalPerItem;
+
+                subtotalItemAsli += hargaAsliPerItem;
+                totalDiskonNominal += diskonNominalPerItem;
+
+                return `
+                    <tr>
+                        <td style="padding: 4px 2px;">${item.nama}</td>
+                        <td style="padding: 4px 2px; text-align: right;">${jumlah}</td>
+                        <td style="padding: 4px 2px; text-align: right;">Rp ${hargaSatuan.toLocaleString()}</td>
+                        <td style="padding: 4px 2px; text-align: right;">${diskonPersenItem}%<br>Rp ${diskonNominalPerItem.toLocaleString()}</td>
+                        <td style="padding: 4px 2px; text-align: right;">Rp ${hargaSetelahDiskonPerItem.toLocaleString()}</td>
+                    </tr>
+                `;
+            }).join('');
+
+            const subtotalSetelahDiskonGlobal = subtotalItemAsli - totalDiskonNominal;
+            const pajakNominal = (pajakPersenTransaksi / 100) * subtotalSetelahDiskonGlobal;
+            const totalAkhirTransaksi = subtotalSetelahDiskonGlobal + pajakNominal;
+
+
+            struk.innerHTML = `
+                <h4 style="text-align: center; font-weight: bold;">Aplikasi kelontong</h4>
+                <p style="text-align: center;">Tanggal: ${transaksiTerakhir.tanggal}</p>
+                <hr>
+                <table style="width: 100%; border-collapse: collapse; font-size: 10px;">
+                    <thead>
+                        <tr>
+                            <th style="border-bottom: 1px solid #000; text-align: left; padding: 4px 2px;">Produk</th>
+                            <th style="border-bottom: 1px solid #000; text-align: right; padding: 4px 2px;">Qty</th>
+                            <th style="border-bottom: 1px solid #000; text-align: right; padding: 4px 2px;">Harga</th>
+                            <th style="border-bottom: 1px solid #000; text-align: right; padding: 4px 2px;">Diskon</th>
+                            <th style="border-bottom: 1px solid #000; text-align: right; padding: 4px 2px;">Subtotal</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${itemRows}
+                    </tbody>
+                </table>
+                <hr>
+                <p style="text-align: right; font-weight: bold; margin-top: 8px;">Subtotal Item: Rp ${subtotalItemAsli.toLocaleString()}</p>
+                <p style="text-align: right; font-weight: bold;">Diskon Total: Rp ${totalDiskonNominal.toLocaleString()}</p>
+                <p style="text-align: right; font-weight: bold;">Pajak (${pajakPersenTransaksi}%): Rp ${pajakNominal.toLocaleString()}</p>
+                <p style="text-align: right; font-weight: bold;">Total: Rp ${totalAkhirTransaksi.toLocaleString()}</p>
+                <p style="text-align: right;">Bayar: Rp ${transaksiTerakhir.bayar.toLocaleString()}</p>
+                <p style="text-align: right;">Kembalian: Rp ${transaksiTerakhir.kembalian.toLocaleString()}</p>
+            `;
+            
+            document.getElementById('strukContainer').classList.remove('hidden');
+            
+            setTimeout(() => {
+                window.print();
+                document.getElementById('strukContainer').classList.add('hidden');
+            }, 100);
+        });
+
+        function updateRiwayat() {
+            const riwayatHtml = riwayat.slice().reverse().map(item => `
+                <div class="p-2 bg-gray-50 rounded">
+                    <p><strong>${item.tanggal}</strong></p>
+                    <p>Total: Rp ${item.total.toLocaleString()}</p>
+                </div>
+            `).join('');
+
+            riwayatListKasir.innerHTML = riwayatHtml;
+            riwayatListBackup.innerHTML = riwayatHtml;
+        }
+
+        hapusRiwayatKasir.addEventListener('click', () => {
+            if (!isAdminLoggedIn) {
+                showNotification('Anda harus login sebagai admin untuk menghapus riwayat!', 'error');
+                return;
+            }
+            if (confirm('Anda yakin ingin menghapus semua riwayat penjualan? Tindakan ini tidak dapat dibatalkan!')) {
+                riwayat = [];
+                localStorage.removeItem('riwayatPenjualan');
+                updateRiwayat();
+                showNotification('Riwayat penjualan berhasil dihapus!', 'info');
+            }
+        });
+
+        hapusRiwayatBackup.addEventListener('click', () => {
+            if (!isAdminLoggedIn) {
+                showNotification('Anda harus login sebagai admin untuk menghapus riwayat!', 'error');
+                return;
+            }
+            if (confirm('Anda yakin ingin menghapus semua riwayat penjualan? Tindakan ini tidak dapat dibatalkan!')) {
+                riwayat = [];
+                localStorage.removeItem('riwayatPenjualan');
+                updateRiwayat();
+                showNotification('Riwayat penjualan berhasil dihapus!', 'info');
+            }
+        });
+
+        function showNotification(message, type = 'success') {
+            notification.textContent = message;
+            if (type === 'success') {
+                notification.style.backgroundColor = '#22c55e';
+                notification.innerHTML = `<i class="fas fa-check mr-2"></i>${message}`;
+            } else if (type === 'info') {
+                notification.style.backgroundColor = '#3b82f6';
+                notification.innerHTML = `<i class="fas fa-info-circle mr-2"></i>${message}`;
+            } else if (type === 'error') {
+                notification.style.backgroundColor = '#ef4444';
+                notification.innerHTML = `<i class="fas fa-times-circle mr-2"></i>${message}`;
+            }
+            notification.style.display = 'block';
+            setTimeout(() => notification.style.display = 'none', 3000);
+        }
+
+        // --- Report Logic ---
+        reportHarianBtn.addEventListener('click', () => {
+            if (!isAdminLoggedIn) {
+                showNotification('Anda harus login sebagai admin untuk melihat laporan!', 'error');
+                return;
+            }
+            generateReport('daily');
+        });
+
+        reportMingguanBtn.addEventListener('click', () => {
+            if (!isAdminLoggedIn) {
+                showNotification('Anda harus login sebagai admin untuk melihat laporan!', 'error');
+                return;
+            }
+            generateReport('weekly');
+        });
+
+        reportBulananBtn.addEventListener('click', () => {
+            if (!isAdminLoggedIn) {
+                showNotification('Anda harus login sebagai admin untuk melihat laporan!', 'error');
+                return;
+            }
+            generateReport('monthly');
+        });
+
+        function generateReport(period) {
+            let filteredTransactions = [];
+            const now = new Date();
+            let reportTitle = '';
+
+            if (period === 'daily') {
+                reportTitle = `Laporan Harian (${now.toLocaleDateString('id-ID')})`;
+                filteredTransactions = riwayat.filter(trans => {
+                    const transDate = new Date(trans.tanggal);
+                    return transDate.getDate() === now.getDate() &&
+                           transDate.getMonth() === now.getMonth() &&
+                           transDate.getFullYear() === now.getFullYear();
+                });
+            } else if (period === 'weekly') {
+                reportTitle = `Laporan Mingguan (7 Hari Terakhir)`;
+                const sevenDaysAgo = new Date(now);
+                sevenDaysAgo.setDate(now.getDate() - 7);
+                // Set hours, minutes, seconds, milliseconds to 0 for accurate comparison
+                sevenDaysAgo.setHours(0, 0, 0, 0);
+                now.setHours(23, 59, 59, 999); // End of today
+
+                filteredTransactions = riwayat.filter(trans => {
+                    const transDate = new Date(trans.tanggal);
+                    return transDate >= sevenDaysAgo && transDate <= now;
+                });
+            } else if (period === 'monthly') {
+                reportTitle = `Laporan Bulanan (${now.toLocaleString('id-ID', { month: 'long', year: 'numeric' })})`;
+                filteredTransactions = riwayat.filter(trans => {
+                    const transDate = new Date(trans.tanggal);
+                    return transDate.getMonth() === now.getMonth() &&
+                           transDate.getFullYear() === now.getFullYear();
+                });
+            }
+
+            let totalSales = 0;
+            let totalTransactions = filteredTransactions.length;
+            let productSales = {}; // { productName: totalQuantitySold }
+
+            filteredTransactions.forEach(trans => {
+                totalSales += trans.total;
+                trans.item.forEach(item => {
+                    productSales[item.nama] = (productSales[item.nama] || 0) + item.jumlah;
+                });
+            });
+
+            // Sort products by quantity sold (most popular)
+            const sortedProducts = Object.entries(productSales).sort(([,a],[,b]) => b - a);
+
+            let reportHtml = `
+                <h4 class="font-bold text-lg mb-2">${reportTitle}</h4>
+                <p><strong>Total Penjualan:</strong> Rp ${totalSales.toLocaleString('id-ID')}</p>
+                <p><strong>Jumlah Transaksi:</strong> ${totalTransactions}</p>
+            `;
+
+            if (sortedProducts.length > 0) {
+                reportHtml += `<h5 class="font-semibold mt-4 mb-2">Produk Terlaris:</h5><ul>`;
+                sortedProducts.slice(0, 5).forEach(([productName, quantity]) => { // Show top 5
+                    reportHtml += `<li>${productName}: ${quantity} unit</li>`;
+                });
+                reportHtml += `</ul>`;
+            } else {
+                reportHtml += `<p class="mt-4">Tidak ada data penjualan untuk periode ini.</p>`;
+            }
+
+            reportOutput.innerHTML = reportHtml;
+            currentReportData = {
+                title: reportTitle,
+                totalSales: totalSales,
+                totalTransactions: totalTransactions,
+                sortedProducts: sortedProducts
+            };
+            // Enable export buttons
+            printReportBtn.disabled = false;
+            exportPdfBtn.disabled = false;
+            exportExcelBtn.disabled = false;
+        }
+
+        // --- Export Functions ---
+        printReportBtn.addEventListener('click', () => {
+            if (!isAdminLoggedIn) {
+                showNotification('Anda harus login sebagai admin untuk mencetak laporan!', 'error');
+                return;
+            }
+            // Temporarily move report content to a dedicated print area
+            const originalContent = document.body.innerHTML;
+            const reportContent = reportPrintArea.outerHTML;
+
+            document.body.innerHTML = reportContent;
+            window.print();
+            document.body.innerHTML = originalContent; // Restore original content
+            location.reload(); // A simple way to fully restore the page state after print
+        });
+
+        exportPdfBtn.addEventListener('click', () => {
+            if (!isAdminLoggedIn) {
+                showNotification('Anda harus login sebagai admin untuk mengekspor laporan!', 'error');
+                return;
+            }
+            if (!currentReportData) {
+                showNotification('Buat laporan terlebih dahulu!', 'error');
+                return;
+            }
+
+            const { jsPDF } = window.jspdf;
+            const doc = new jsPDF();
+
+            html2canvas(reportOutput).then(canvas => {
+                const imgData = canvas.toDataURL('image/png');
+                const imgWidth = 190; // A4 width in mm - 20mm margins
+                const pageHeight = doc.internal.pageSize.height;
+                const imgHeight = canvas.height * imgWidth / canvas.width;
+                let heightLeft = imgHeight;
+
+                let position = 10; // Top margin
+
+                doc.addImage(imgData, 'PNG', 10, position, imgWidth, imgHeight);
+                heightLeft -= pageHeight;
+
+                while (heightLeft >= 0) {
+                    position = heightLeft - imgHeight + 10;
+                    doc.addPage();
+                    doc.addImage(imgData, 'PNG', 10, position, imgWidth, imgHeight);
+                    heightLeft -= pageHeight;
+                }
+                doc.save(`${currentReportData.title.replace(/ /g, '_')}.pdf`);
+            }).catch(error => {
+                console.error("Error generating PDF:", error);
+                showNotification('Gagal membuat PDF!', 'error');
+            });
+        });
+
+        exportExcelBtn.addEventListener('click', () => {
+            if (!isAdminLoggedIn) {
+                showNotification('Anda harus login sebagai admin untuk mengekspor laporan!', 'error');
+                return;
+            }
+            if (!currentReportData) {
+                showNotification('Buat laporan terlebih dahulu!', 'error');
+                return;
+            }
+
+            const ws_data = [
+                [currentReportData.title],
+                [],
+                ["Total Penjualan:", `Rp ${currentReportData.totalSales.toLocaleString('id-ID')}`],
+                ["Jumlah Transaksi:", currentReportData.totalTransactions],
+                [],
+                ["Produk Terlaris:"],
+                ["Nama Produk", "Jumlah Terjual"]
+            ];
+
+            currentReportData.sortedProducts.forEach(([productName, quantity]) => {
+                ws_data.push([productName, quantity]);
+            });
+
+            const ws = XLSX.utils.aoa_to_sheet(ws_data);
+            const wb = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(wb, ws, "Laporan Penjualan");
+            XLSX.writeFile(wb, `${currentReportData.title.replace(/ /g, '_')}.xlsx`);
+        });
+    </script>
+</body>
+</html>
