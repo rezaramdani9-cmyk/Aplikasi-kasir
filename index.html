@@ -216,13 +216,35 @@
                         <h2 class="text-xl font-semibold mb-4 text-gray-800">
                             <i class="fas fa-credit-card mr-2"></i>Pembayaran
                         </h2>
-                        <input type="number" id="jumlahBayar" placeholder="Jumlah Bayar" class="w-full p-2 mb-4 border rounded">
-                        <div class="flex justify-between mb-4">
-                            <span>Kembalian:</span><span id="kembalian">Rp 0</span>
+                        <div class="mb-4">
+                            <label for="metodePembayaran" class="block text-sm font-medium text-gray-700 mb-1">Metode Pembayaran:</label>
+                            <select id="metodePembayaran" class="w-full p-2 border rounded">
+                                <option value="tunai">Tunai</option>
+                                <option value="transfer">Transfer Bank</option> <!-- Changed from qris -->
+                            </select>
                         </div>
-                        <button id="bayarBtn" class="w-full bg-green-500 text-white py-3 rounded hover:bg-green-600 mb-4">
-                            <i class="fas fa-check mr-2"></i>Bayar & Selesai
-                        </button>
+
+                        <div id="pembayaranTunai" class="">
+                            <input type="number" id="jumlahBayar" placeholder="Jumlah Bayar" class="w-full p-2 mb-4 border rounded">
+                            <div class="flex justify-between mb-4">
+                                <span>Kembalian:</span><span id="kembalian">Rp 0</span>
+                            </div>
+                            <button id="bayarBtn" class="w-full bg-green-500 text-white py-3 rounded hover:bg-green-600 mb-4">
+                                <i class="fas fa-check mr-2"></i>Bayar & Selesai
+                            </button>
+                        </div>
+
+                        <div id="pembayaranTransfer" class="hidden text-center"> <!-- Changed ID from pembayaranQris -->
+                            <p class="font-bold text-lg mb-2">Total Pembayaran: <span id="transferTotal">Rp 0</span></p> <!-- Changed ID from qrisTotal -->
+                            <p class="text-gray-700 mb-2">Silakan transfer ke salah satu rekening berikut:</p>
+                            <div id="daftarRekeningTransfer" class="text-left mb-4 space-y-2">
+                                <!-- Daftar rekening akan dimuat di sini oleh JS -->
+                            </div>
+                            <button id="transferSelesaiBtn" class="w-full bg-green-500 text-white py-3 rounded hover:bg-green-600 mb-4"> <!-- Changed ID from qrisSelesaiBtn -->
+                                <i class="fas fa-check mr-2"></i>Pembayaran Selesai (Transfer)
+                            </button>
+                        </div>
+                        
                         <button id="cetakStruk" class="w-full bg-blue-500 text-white py-2 rounded hover:bg-blue-600" disabled>
                             <i class="fas fa-print mr-2"></i>Cetak Struk
                         </button>
@@ -272,6 +294,28 @@
                     <!-- Produk akan dimuat di sini oleh JS -->
                 </div>
             </div>
+
+            <!-- START NEW SECTION: Manajemen Rekening Bank -->
+            <h2 class="text-xl font-semibold mb-4 mt-8 text-gray-800">
+                <i class="fas fa-university mr-2"></i>Manajemen Rekening Bank
+            </h2>
+            <div class="mb-6 bg-gray-50 p-4 rounded-lg">
+                <h3 class="font-semibold text-gray-800 mb-3">Tambah Rekening Baru</h3>
+                <input type="text" id="namaBankInput" placeholder="Nama Bank (contoh: BCA)" class="w-full p-2 mb-2 border rounded">
+                <input type="text" id="nomorRekeningInput" placeholder="Nomor Rekening" class="w-full p-2 mb-2 border rounded">
+                <input type="text" id="namaPemilikInput" placeholder="Nama Pemilik Rekening" class="w-full p-2 mb-2 border rounded">
+                <button id="tambahRekeningBtn" class="w-full bg-blue-500 text-white py-2 rounded hover:bg-blue-600">
+                    <i class="fas fa-plus mr-2"></i>Tambah Rekening
+                </button>
+            </div>
+
+            <div class="mb-6">
+                <h3 class="font-semibold text-gray-800 mb-3">Daftar Rekening</h3>
+                <div id="daftarRekening" class="space-y-3 max-h-60 overflow-y-auto">
+                    <!-- Rekening akan dimuat di sini oleh JS -->
+                </div>
+            </div>
+            <!-- END NEW SECTION: Manajemen Rekening Bank -->
 
             <h2 class="text-xl font-semibold mb-4 mt-8 text-gray-800">
                 <i class="fas fa-chart-line mr-2"></i>Laporan Penjualan
@@ -346,6 +390,21 @@
             </div>
         </div>
 
+        <!-- START NEW SECTION: Modal Edit Rekening -->
+        <div id="editRekeningModal" class="modal">
+            <div class="modal-content">
+                <span id="closeRekeningModal" class="close absolute top-2 right-2 text-2xl cursor-pointer">&times;</span>
+                <h3 class="font-semibold text-gray-800 mb-3">Edit Rekening Bank</h3>
+                <input type="text" id="editNamaBank" placeholder="Nama Bank" class="w-full p-2 mb-2 border rounded">
+                <input type="text" id="editNomorRekening" placeholder="Nomor Rekening" class="w-full p-2 mb-2 border rounded">
+                <input type="text" id="editNamaPemilik" placeholder="Nama Pemilik Rekening" class="w-full p-2 mb-2 border rounded">
+                <button id="simpanEditRekening" class="w-full bg-green-500 text-white py-2 rounded hover:bg-green-600">
+                    <i class="fas fa-save mr-2"></i>Simpan Perubahan
+                </button>
+            </div>
+        </div>
+        <!-- END NEW SECTION: Modal Edit Rekening -->
+
         <!-- Notifikasi -->
         <div id="notification" class="notification">
             <i class="fas fa-check mr-2"></i>Produk ditambah ke keranjang!
@@ -406,6 +465,28 @@
         const exportPdfBtn = document.getElementById('exportPdfBtn');
         const exportExcelBtn = document.getElementById('exportExcelBtn');
 
+        // New elements for Transfer (formerly QRIS)
+        const metodePembayaranSelect = document.getElementById('metodePembayaran');
+        const pembayaranTunaiDiv = document.getElementById('pembayaranTunai');
+        const pembayaranTransferDiv = document.getElementById('pembayaranTransfer'); // Changed ID
+        const transferTotalSpan = document.getElementById('transferTotal'); // Changed ID
+        const transferSelesaiBtn = document.getElementById('transferSelesaiBtn'); // Changed ID
+        const daftarRekeningTransferDiv = document.getElementById('daftarRekeningTransfer'); // New element for displaying bank accounts
+
+        // New elements for Bank Account Management
+        const namaBankInput = document.getElementById('namaBankInput');
+        const nomorRekeningInput = document.getElementById('nomorRekeningInput');
+        const namaPemilikInput = document.getElementById('namaPemilikInput');
+        const tambahRekeningBtn = document.getElementById('tambahRekeningBtn');
+        const daftarRekeningDiv = document.getElementById('daftarRekening');
+
+        const editRekeningModal = document.getElementById('editRekeningModal');
+        const closeRekeningModal = document.getElementById('closeRekeningModal');
+        const simpanEditRekening = document.getElementById('simpanEditRekening');
+        const editNamaBank = document.getElementById('editNamaBank');
+        const editNomorRekening = document.getElementById('editNomorRekening');
+        const editNamaPemilik = document.getElementById('editNamaPemilik');
+
 
         // Daftar Admin (username dan password) - TIDAK AMAN untuk produksi, hanya demo
         const ADMINS = [
@@ -438,6 +519,10 @@
             gambar: produk.gambar || DEFAULT_IMAGE_BASE64 // Ensure image is always present
         }));
 
+        // New data storage for bank accounts
+        let daftarRekeningBank = JSON.parse(localStorage.getItem('daftarRekeningBank')) || [];
+        let editRekeningIndex = -1; // To keep track of which account is being edited
+
         let editIndex = -1;
         let currentReportData = null; // To store data for export functions
 
@@ -445,6 +530,7 @@
         updateRiwayat();
         updateKatalogKasir(); // Update kasir catalog on load
         updateKatalogAdmin(); // Update admin catalog on load
+        updateDaftarRekening(); // Call this initially to load bank accounts
         calculateTotal();
         updateAdminUI(); // Call this initially to set up the UI
 
@@ -463,6 +549,7 @@
                 showNotification(`Login Admin ${username} Berhasil!`, 'success');
                 updateAdminUI();
                 updateKatalogAdmin(); // Refresh admin catalog after login
+                updateDaftarRekening(); // Refresh bank accounts after login
             } else {
                 showNotification('Username atau kata sandi salah!', 'error');
             }
@@ -473,6 +560,7 @@
             showNotification('Logout Admin Berhasil!', 'info');
             updateAdminUI();
             updateKatalogAdmin(); // Refresh admin catalog after logout (to hide edit buttons)
+            updateDaftarRekening(); // Refresh bank accounts after logout
             // If currently on admin panel or backup/restore section, switch back to kasir
             if (!adminPanelSection.classList.contains('hidden') || !backupRestoreSection.classList.contains('hidden')) {
                 showKasirBtn.click();
@@ -522,6 +610,7 @@
                 adminPanelSection.classList.remove('hidden'); // Show admin panel
                 backupRestoreSection.classList.add('hidden');
                 updateKatalogAdmin(); // Ensure admin catalog is updated
+                updateDaftarRekening(); // Ensure bank accounts are updated
             } else {
                 showNotification('Anda harus login sebagai admin untuk mengakses fitur ini!', 'error');
             }
@@ -546,7 +635,8 @@
             }
             const dataToBackup = {
                 katalogProduk: katalogProduk,
-                riwayatPenjualan: riwayat
+                riwayatPenjualan: riwayat,
+                daftarRekeningBank: daftarRekeningBank // Include bank accounts in backup
             };
             const jsonData = JSON.stringify(dataToBackup, null, 2);
             const blob = new Blob([jsonData], { type: 'application/json' });
@@ -572,7 +662,7 @@
                 return;
             }
 
-            if (!confirm('Anda yakin ingin me-restore data? Ini akan menimpa semua data produk dan riwayat penjualan yang ada!')) {
+            if (!confirm('Anda yakin ingin me-restore data? Ini akan menimpa semua data produk, riwayat penjualan, dan rekening bank yang ada!')) {
                 return;
             }
 
@@ -580,9 +670,10 @@
             reader.onload = (event) => {
                 try {
                     const restoredData = JSON.parse(event.target.result);
-                    if (restoredData.katalogProduk && restoredData.riwayatPenjualan) {
+                    if (restoredData.katalogProduk && restoredData.riwayatPenjualan && restoredData.daftarRekeningBank) { // Check for bank accounts
                         katalogProduk = restoredData.katalogProduk;
                         riwayat = restoredData.riwayatPenjualan;
+                        daftarRekeningBank = restoredData.daftarRekeningBank; // Restore bank accounts
 
                         // Pastikan data yang di-restore memiliki properti diskonProduk dan gambar
                         katalogProduk = katalogProduk.map(produk => ({
@@ -593,15 +684,17 @@
 
                         localStorage.setItem('katalogProduk', JSON.stringify(katalogProduk));
                         localStorage.setItem('riwayatPenjualan', JSON.stringify(riwayat));
+                        localStorage.setItem('daftarRekeningBank', JSON.stringify(daftarRekeningBank)); // Save restored bank accounts
 
                         updateKatalogKasir(); // Update both catalogs after restore
                         updateKatalogAdmin();
                         updateRiwayat();
+                        updateDaftarRekening(); // Update bank accounts display
                         keranjang = [];
                         updateKeranjang();
                         showNotification('Data berhasil di-restore!', 'success');
                     } else {
-                        alert('Format file JSON tidak valid. Pastikan berisi "katalogProduk" dan "riwayatPenjualan".');
+                        alert('Format file JSON tidak valid. Pastikan berisi "katalogProduk", "riwayatPenjualan", dan "daftarRekeningBank".');
                     }
                 } catch (e) {
                     alert('Gagal membaca file JSON. Pastikan file tidak rusak.');
@@ -659,7 +752,7 @@
             const nama = namaProdukInput.value.trim();
             const harga = parseInt(hargaProdukInput.value);
             const diskonProdukBaru = parseFloat(diskonProdukBaruInput.value);
-            const gambarFile = gambarProdukInput.files[0];
+            const gambarFile = gambarProduukInput.files[0];
             let gambarBase64 = DEFAULT_IMAGE_BASE64;
 
             if (gambarFile) {
@@ -761,9 +854,13 @@
             editModal.style.display = 'none';
         });
 
+        // Update the global window.onclick to also close the new modal
         window.onclick = function(event) {
             if (event.target == editModal) {
                 editModal.style.display = 'none';
+            }
+            if (event.target == editRekeningModal) { // Add this line
+                editRekeningModal.style.display = 'none';
             }
         };
 
@@ -788,6 +885,105 @@
                 `;
             });
         }
+
+        // --- Bank Account Management Logic ---
+        tambahRekeningBtn.addEventListener('click', () => {
+            if (!isAdminLoggedIn) {
+                showNotification('Anda harus login sebagai admin untuk menambah rekening!', 'error');
+                return;
+            }
+            const namaBank = namaBankInput.value.trim();
+            const nomorRekening = nomorRekeningInput.value.trim();
+            const namaPemilik = namaPemilikInput.value.trim();
+
+            if (namaBank && nomorRekening && namaPemilik) {
+                daftarRekeningBank.push({ namaBank, nomorRekening, namaPemilik });
+                localStorage.setItem('daftarRekeningBank', JSON.stringify(daftarRekeningBank));
+                updateDaftarRekening();
+                namaBankInput.value = '';
+                nomorRekeningInput.value = '';
+                namaPemilikInput.value = '';
+                showNotification('Rekening bank berhasil ditambahkan!', 'success');
+            } else {
+                alert('Harap isi semua kolom untuk rekening bank.');
+            }
+        });
+
+        daftarRekeningDiv.addEventListener('click', (e) => {
+            // Edit Rekening
+            if (e.target.classList.contains('edit-rekening') || e.target.closest('.edit-rekening')) {
+                if (!isAdminLoggedIn) {
+                    showNotification('Anda harus login sebagai admin untuk mengedit rekening!', 'error');
+                    return;
+                }
+                const index = parseInt(e.target.closest('.edit-rekening').dataset.index);
+                editRekeningIndex = index;
+                editNamaBank.value = daftarRekeningBank[index].namaBank;
+                editNomorRekening.value = daftarRekeningBank[index].nomorRekening;
+                editNamaPemilik.value = daftarRekeningBank[index].namaPemilik;
+                editRekeningModal.style.display = 'block';
+            }
+            // Hapus Rekening
+            if (e.target.classList.contains('hapus-rekening') || e.target.closest('.hapus-rekening')) {
+                if (!isAdminLoggedIn) {
+                    showNotification('Anda harus login sebagai admin untuk menghapus rekening!', 'error');
+                    return;
+                }
+                const index = parseInt(e.target.closest('.hapus-rekening').dataset.index);
+                if (confirm(`Anda yakin ingin menghapus rekening "${daftarRekeningBank[index].namaBank} - ${daftarRekeningBank[index].nomorRekening}"?`)) {
+                    daftarRekeningBank.splice(index, 1);
+                    localStorage.setItem('daftarRekeningBank', JSON.stringify(daftarRekeningBank));
+                    updateDaftarRekening();
+                    showNotification('Rekening bank berhasil dihapus!', 'info');
+                }
+            }
+        });
+
+        simpanEditRekening.addEventListener('click', () => {
+            if (!isAdminLoggedIn) {
+                showNotification('Anda harus login sebagai admin untuk menyimpan perubahan rekening!', 'error');
+                return;
+            }
+            if (editNamaBank.value.trim() && editNomorRekening.value.trim() && editNamaPemilik.value.trim()) {
+                daftarRekeningBank[editRekeningIndex].namaBank = editNamaBank.value.trim();
+                daftarRekeningBank[editRekeningIndex].nomorRekening = editNomorRekening.value.trim();
+                daftarRekeningBank[editRekeningIndex].namaPemilik = editNamaPemilik.value.trim();
+                localStorage.setItem('daftarRekeningBank', JSON.stringify(daftarRekeningBank));
+                updateDaftarRekening();
+                editRekeningModal.style.display = 'none';
+                showNotification('Rekening bank berhasil diupdate!', 'success');
+            } else {
+                alert('Harap isi semua kolom untuk rekening bank.');
+            }
+        });
+
+        closeRekeningModal.addEventListener('click', () => {
+            editRekeningModal.style.display = 'none';
+        });
+
+        function updateDaftarRekening() {
+            daftarRekeningDiv.innerHTML = '';
+            if (daftarRekeningBank.length === 0) {
+                daftarRekeningDiv.innerHTML = '<p class="text-gray-600">Belum ada rekening bank yang ditambahkan.</p>';
+                return;
+            }
+            daftarRekeningBank.forEach((rekening, index) => {
+                daftarRekeningDiv.innerHTML += `
+                    <div class="flex justify-between items-center p-3 bg-white rounded shadow-sm">
+                        <div>
+                            <p class="font-medium">${rekening.namaBank}</p>
+                            <p class="text-sm text-gray-600">${rekening.nomorRekening}</p>
+                            <p class="text-xs text-gray-500">a/n ${rekening.namaPemilik}</p>
+                        </div>
+                        <div class="flex space-x-2">
+                            <button class="edit-rekening btn text-blue-500 hover:text-blue-700" data-index="${index}"><i class="fas fa-edit"></i> Edit</button>
+                            <button class="hapus-rekening btn text-red-500 hover:text-red-700" data-index="${index}"><i class="fas fa-trash"></i> Hapus</button>
+                        </div>
+                    </div>
+                `;
+            });
+        }
+
 
         // Fungsi-fungsi keranjang dan pembayaran tetap sama (akses user biasa)
         function tambahKeKeranjang(nama, harga) {
@@ -891,12 +1087,26 @@
             subtotalItemEl.textContent = `Rp ${subtotalItem.toLocaleString()}`;
             diskonTotalEl.textContent = `Rp ${totalDiskon.toLocaleString()}`;
             totalEl.textContent = `Rp ${Math.round(totalAkhir).toLocaleString()}`;
+            transferTotalSpan.textContent = `Rp ${Math.round(totalAkhir).toLocaleString()}`; // Updated for transfer
         }
 
         document.getElementById('jumlahBayar').addEventListener('input', () => {
             const bayar = parseFloat(document.getElementById('jumlahBayar').value) || 0;
             const total = parseFloat(totalEl.textContent.replace(/[^0-9]/g, ''));
             kembalianEl.textContent = `Rp ${(bayar - total).toLocaleString()}`;
+        });
+
+        // --- Payment Method Toggle ---
+        metodePembayaranSelect.addEventListener('change', () => {
+            if (metodePembayaranSelect.value === 'tunai') {
+                pembayaranTunaiDiv.classList.remove('hidden');
+                pembayaranTransferDiv.classList.add('hidden'); // Updated for transfer
+            } else if (metodePembayaranSelect.value === 'transfer') { // Updated for transfer
+                pembayaranTunaiDiv.classList.add('hidden');
+                pembayaranTransferDiv.classList.remove('hidden'); // Updated for transfer
+                calculateTotal(); // Ensure transfer total is updated
+                displayRekeningForTransfer(); // Display bank accounts for transfer
+            }
         });
 
         document.getElementById('bayarBtn').addEventListener('click', () => {
@@ -914,7 +1124,8 @@
                     pajakPersenTransaksi: parseFloat(pajakPersenInput.value) || 0,
                     total: Math.round(total),
                     bayar,
-                    kembalian: bayar - Math.round(total)
+                    kembalian: bayar - Math.round(total),
+                    metode: 'Tunai' // Add payment method
                 };
                 riwayat.push(transaksi);
                 localStorage.setItem('riwayatPenjualan', JSON.stringify(riwayat));
@@ -930,6 +1141,39 @@
                 alert('Jumlah bayar tidak cukup atau keranjang kosong!');
             }
         });
+
+        transferSelesaiBtn.addEventListener('click', () => { // Updated ID
+            const total = parseFloat(totalEl.textContent.replace(/[^0-9]/g, ''));
+            if (keranjang.length > 0) {
+                const transaksi = {
+                    tanggal: new Date().toLocaleString(),
+                    item: keranjang.map(item => ({
+                        nama: item.nama,
+                        harga: item.harga,
+                        jumlah: item.jumlah,
+                        diskonPersenItem: item.diskonPersenItem
+                    })),
+                    pajakPersenTransaksi: parseFloat(pajakPersenInput.value) || 0,
+                    total: Math.round(total),
+                    bayar: Math.round(total), // For Transfer, assume bayar = total
+                    kembalian: 0, // For Transfer, assume kembalian = 0
+                    metode: 'Transfer Bank' // Updated payment method
+                };
+                riwayat.push(transaksi);
+                localStorage.setItem('riwayatPenjualan', JSON.stringify(riwayat));
+                keranjang = [];
+                updateKeranjang();
+                updateRiwayat();
+                document.getElementById('jumlahBayar').value = ''; // Clear tunai input
+                kembalianEl.textContent = 'Rp 0'; // Reset kembalian
+                document.getElementById('cetakStruk').disabled = false;
+                alert('Transaksi Transfer Bank selesai! Klik "Cetak Struk" untuk struk.');
+                showNotification('Transaksi Transfer Bank berhasil!', 'success');
+            } else {
+                alert('Keranjang kosong!');
+            }
+        });
+
 
         document.getElementById('cetakStruk').addEventListener('click', () => {
             const struk = document.getElementById('struk');
@@ -997,6 +1241,7 @@
                 <p style="text-align: right; font-weight: bold;">Total: Rp ${totalAkhirTransaksi.toLocaleString()}</p>
                 <p style="text-align: right;">Bayar: Rp ${transaksiTerakhir.bayar.toLocaleString()}</p>
                 <p style="text-align: right;">Kembalian: Rp ${transaksiTerakhir.kembalian.toLocaleString()}</p>
+                <p style="text-align: right;">Metode Pembayaran: ${transaksiTerakhir.metode || 'Tunai'}</p>
             `;
             
             document.getElementById('strukContainer').classList.remove('hidden');
@@ -1012,6 +1257,7 @@
                 <div class="p-2 bg-gray-50 rounded">
                     <p><strong>${item.tanggal}</strong></p>
                     <p>Total: Rp ${item.total.toLocaleString()}</p>
+                    <p class="text-xs text-gray-500">Metode: ${item.metode || 'Tunai'}</p>
                 </div>
             `).join('');
 
@@ -1246,6 +1492,24 @@
             XLSX.utils.book_append_sheet(wb, ws, "Laporan Penjualan");
             XLSX.writeFile(wb, `${currentReportData.title.replace(/ /g, '_')}.xlsx`);
         });
+
+        // New function to display bank accounts for transfer
+        function displayRekeningForTransfer() {
+            daftarRekeningTransferDiv.innerHTML = '';
+            if (daftarRekeningBank.length === 0) {
+                daftarRekeningTransferDiv.innerHTML = '<p class="text-red-500">Belum ada rekening bank yang ditambahkan. Harap tambahkan di Admin Panel.</p>';
+                return;
+            }
+            daftarRekeningBank.forEach((rekening) => {
+                daftarRekeningTransferDiv.innerHTML += `
+                    <div class="p-2 border border-gray-200 rounded bg-gray-50">
+                        <p class="font-semibold">${rekening.namaBank}</p>
+                        <p>No. Rek: <span class="font-medium">${rekening.nomorRekening}</span></p>
+                        <p>A/N: ${rekening.namaPemilik}</p>
+                    </div>
+                `;
+            });
+        }
     </script>
 </body>
 </html>
